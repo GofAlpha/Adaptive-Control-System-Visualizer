@@ -85,11 +85,10 @@ async def calculate_control(
     x_base_url: Optional[str] = Header(default=None, alias="X-RapidAPI-Base-Url"),
 ):
     """Calculate adaptive control parameters.
-    Uses per-request RapidAPI credentials from headers. Falls back to mock data if missing.
+    Uses per-request RapidAPI credentials from headers. Demo fallback removed to ensure real API usage.
     """
     if not x_base_url or not x_rapidapi_key or not x_rapidapi_host:
-        # For demo purposes, return mock data if credentials are not provided
-        return generate_mock_response(request)
+        raise HTTPException(status_code=400, detail="Missing RapidAPI credentials (Base URL, Key, and Host are required)")
 
     try:
         headers = {
@@ -107,9 +106,8 @@ async def calculate_control(
         response.raise_for_status()
         return response.json()
 
-    except requests.exceptions.RequestException:
-        # Fallback to mock data on API error
-        return generate_mock_response(request)
+    except requests.exceptions.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"Upstream API request failed: {str(exc)}")
 
 @app.post("/api/graph")
 async def generate_graph_data(
@@ -118,7 +116,9 @@ async def generate_graph_data(
     x_rapidapi_host: Optional[str] = Header(default=None, alias="X-RapidAPI-Host"),
     x_base_url: Optional[str] = Header(default=None, alias="X-RapidAPI-Base-Url"),
 ):
-    """Generate data for parameter sweep graphing using per-request creds."""
+    """Generate data for parameter sweep graphing using per-request creds. Demo fallback removed."""
+    if not x_base_url or not x_rapidapi_key or not x_rapidapi_host:
+        raise HTTPException(status_code=400, detail="Missing RapidAPI credentials (Base URL, Key, and Host are required)")
     results = []
     param_values = []
 
@@ -136,28 +136,25 @@ async def generate_graph_data(
 
         # Calculate result
         try:
-            if not x_base_url or not x_rapidapi_key or not x_rapidapi_host:
-                result = generate_mock_response(modified_request)
-            else:
-                headers = {
-                    "Content-Type": "application/json",
-                    "X-RapidAPI-Key": x_rapidapi_key,
-                    "X-RapidAPI-Host": x_rapidapi_host,
-                }
+            headers = {
+                "Content-Type": "application/json",
+                "X-RapidAPI-Key": x_rapidapi_key,
+                "X-RapidAPI-Host": x_rapidapi_host,
+            }
 
-                response = requests.post(
-                    f"{x_base_url}/calculate",
-                    json=modified_request.model_dump(exclude_none=True),
-                    headers=headers,
-                    timeout=10,
-                )
-                result = response.json() if response.status_code == 200 else generate_mock_response(modified_request)
+            response = requests.post(
+                f"{x_base_url}/calculate",
+                json=modified_request.model_dump(exclude_none=True),
+                headers=headers,
+                timeout=10,
+            )
+            response.raise_for_status()
+            result = response.json()
 
             results.append(result)
 
-        except Exception:
-            # Use mock data on error
-            results.append(generate_mock_response(modified_request))
+        except requests.exceptions.RequestException as exc:
+            raise HTTPException(status_code=502, detail=f"Upstream API request failed during sweep: {str(exc)}")
 
     return {
         "parameter_values": param_values,
