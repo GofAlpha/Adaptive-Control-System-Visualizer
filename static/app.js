@@ -94,45 +94,38 @@ function initializeChart() {
 
 // API Configuration functions
 async function saveApiConfig() {
-    const config = {
-        base_url: document.getElementById('apiUrl').value,
-        api_key: document.getElementById('apiKey').value,
-        api_host: document.getElementById('apiHost').value
-    };
-
-    try {
-        const response = await fetch(apiUrl('/api/config'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(config)
-        });
-
-        if (response.ok) {
-            apiConfigured = !!(config.base_url && config.api_key && config.api_host);
-            updateApiStatus();
-            showMessage('API configuration saved successfully!', 'success');
-        } else {
-            showMessage('Failed to save API configuration', 'error');
-        }
-    } catch (error) {
-        showMessage('Error saving API configuration: ' + error.message, 'error');
-    }
+    // No persistence: we just validate current inputs and update UI.
+    const baseUrl = document.getElementById('apiUrl').value.trim();
+    const apiKey = document.getElementById('apiKey').value.trim();
+    const apiHost = document.getElementById('apiHost').value.trim();
+    apiConfigured = !!(baseUrl && apiKey && apiHost);
+    updateApiStatus();
+    showMessage(apiConfigured
+        ? 'Using per-request credentials. They will be sent only with your requests.'
+        : 'Incomplete credentials. Requests will use demo mode until all fields are filled.',
+        apiConfigured ? 'success' : 'error');
 }
 
 async function loadApiConfig() {
-    try {
-        const response = await fetch(apiUrl('/api/config'));
-        const config = await response.json();
-        
-        document.getElementById('apiUrl').value = config.base_url || '';
-        document.getElementById('apiHost').value = config.api_host || '';
-        apiConfigured = config.has_api_key && config.base_url && config.api_host;
-        updateApiStatus();
-    } catch (error) {
-        console.error('Error loading API configuration:', error);
+    // No server-side storage. Leave fields as-is and compute status.
+    const baseUrl = document.getElementById('apiUrl').value.trim();
+    const apiKey = document.getElementById('apiKey').value.trim();
+    const apiHost = document.getElementById('apiHost').value.trim();
+    apiConfigured = !!(baseUrl && apiKey && apiHost);
+    updateApiStatus();
+}
+
+function getApiHeaders() {
+    const baseUrl = document.getElementById('apiUrl').value.trim();
+    const apiKey = document.getElementById('apiKey').value.trim();
+    const apiHost = document.getElementById('apiHost').value.trim();
+    const headers = { 'Content-Type': 'application/json' };
+    if (baseUrl && apiKey && apiHost) {
+        headers['X-RapidAPI-Base-Url'] = baseUrl;
+        headers['X-RapidAPI-Key'] = apiKey;
+        headers['X-RapidAPI-Host'] = apiHost;
     }
+    return headers;
 }
 
 function updateApiStatus() {
@@ -194,9 +187,7 @@ async function calculateSingle() {
         const data = getFormData();
         const response = await fetch(apiUrl('/api/calculate'), {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: getApiHeaders(),
             body: JSON.stringify(data)
         });
 
@@ -346,9 +337,7 @@ async function generateGraph() {
 
         const response = await fetch(apiUrl('/api/graph'), {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: getApiHeaders(),
             body: JSON.stringify(graphRequest)
         });
 
@@ -389,9 +378,7 @@ async function updatePreview() {
         const data = getFormData();
         const response = await fetch(apiUrl('/api/calculate'), {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: getApiHeaders(),
             body: JSON.stringify(data)
         });
 
