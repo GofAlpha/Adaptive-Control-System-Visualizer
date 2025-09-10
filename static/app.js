@@ -94,15 +94,15 @@ function initializeChart() {
 
 // API Configuration functions
 async function saveApiConfig() {
-    // No persistence: we just validate current inputs and update UI.
+    // Validate current inputs and update UI.
     const baseUrl = document.getElementById('apiUrl').value.trim();
     const apiKey = document.getElementById('apiKey').value.trim();
     const apiHost = document.getElementById('apiHost').value.trim();
     apiConfigured = !!(baseUrl && apiKey && apiHost);
     updateApiStatus();
     showMessage(apiConfigured
-        ? 'Using per-request credentials. They will be sent only with your requests.'
-        : 'Incomplete credentials. Requests will use demo mode until all fields are filled.',
+        ? 'Credentials saved locally to this page session. Requests will use the real API.'
+        : 'Incomplete credentials. Requests are blocked until all fields are filled.',
         apiConfigured ? 'success' : 'error');
 }
 
@@ -137,7 +137,7 @@ function updateApiStatus() {
         statusElement.innerHTML = '<span class="status-indicator status-connected"></span>Connected to RapidAPI';
     } else {
         indicator.className = 'status-indicator status-disconnected';
-        statusElement.innerHTML = '<span class="status-indicator status-disconnected"></span>Using Demo Mode (Configure API for real data)';
+        statusElement.innerHTML = '<span class="status-indicator status-disconnected"></span>Not connected. Enter RapidAPI Base URL, Key, and Host to enable.';
     }
 }
 
@@ -184,6 +184,10 @@ async function calculateSingle() {
     button.disabled = true;
 
     try {
+        if (!apiConfigured) {
+            showMessage('Please configure RapidAPI Base URL, Key, and Host before making requests.', 'error');
+            return;
+        }
         const data = getFormData();
         const response = await fetch(apiUrl('/api/calculate'), {
             method: 'POST',
@@ -326,6 +330,10 @@ async function generateGraph() {
     button.disabled = true;
 
     try {
+        if (!apiConfigured) {
+            showMessage('Please configure RapidAPI Base URL, Key, and Host before generating graphs.', 'error');
+            return;
+        }
         const baseRequest = getFormData();
         const graphRequest = {
             parameter_name: document.getElementById('parameterSelect').value,
@@ -375,6 +383,9 @@ function updateChart(data) {
 // Real-time preview update (debounced)
 async function updatePreview() {
     try {
+        if (!apiConfigured) {
+            return; // Avoid spamming the backend with 400s when not configured
+        }
         const data = getFormData();
         const response = await fetch(apiUrl('/api/calculate'), {
             method: 'POST',
