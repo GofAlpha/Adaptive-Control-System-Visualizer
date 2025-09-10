@@ -85,7 +85,7 @@ async def calculate_control(
     x_base_url: Optional[str] = Header(default=None, alias="X-RapidAPI-Base-Url"),
 ):
     """Calculate adaptive control parameters.
-    Uses per-request RapidAPI credentials from headers. Demo fallback removed to ensure real API usage.
+    Uses per-request RapidAPI credentials from headers. The provided X-RapidAPI-Base-Url must be the FULL upstream endpoint URL (e.g., https://.../calculate or https://.../calculate/batch). No suffix is appended server-side.
     """
     if not x_base_url or not x_rapidapi_key or not x_rapidapi_host:
         raise HTTPException(status_code=400, detail="Missing RapidAPI credentials (Base URL, Key, and Host are required)")
@@ -98,7 +98,7 @@ async def calculate_control(
         }
 
         response = requests.post(
-            f"{x_base_url}/calculate",
+            f"{x_base_url}",
             json=request.model_dump(exclude_none=True),
             headers=headers,
             timeout=10,
@@ -116,7 +116,9 @@ async def generate_graph_data(
     x_rapidapi_host: Optional[str] = Header(default=None, alias="X-RapidAPI-Host"),
     x_base_url: Optional[str] = Header(default=None, alias="X-RapidAPI-Base-Url"),
 ):
-    """Generate data for parameter sweep graphing using per-request creds. Demo fallback removed."""
+    """Generate data for parameter sweep graphing using per-request creds. Demo fallback removed.
+    The provided X-RapidAPI-Base-Url must be the FULL upstream endpoint URL.
+    """
     if not x_base_url or not x_rapidapi_key or not x_rapidapi_host:
         raise HTTPException(status_code=400, detail="Missing RapidAPI credentials (Base URL, Key, and Host are required)")
     results = []
@@ -143,7 +145,7 @@ async def generate_graph_data(
             }
 
             response = requests.post(
-                f"{x_base_url}/calculate",
+                f"{x_base_url}",
                 json=modified_request.model_dump(exclude_none=True),
                 headers=headers,
                 timeout=10,
