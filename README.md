@@ -32,7 +32,7 @@ The application will start on `http://localhost:8000`
 
 Enter valid RapidAPI credentials in the configuration section at the top of the UI. Requests are blocked until all three are provided:
 
-- Base URL (e.g., `https://your-rapidapi-service.example.com`) that exposes a `/calculate` endpoint
+- Endpoint URL (FULL path to the upstream endpoint you want to call, e.g., `https://your-rapidapi-service.example.com/v1/calculate` or `.../calculate/batch`)
 - RapidAPI Key
 - RapidAPI Host header (e.g., `your-rapidapi-service.example.com`)
 
@@ -65,14 +65,14 @@ To connect to the real Adaptive Control System API for your session:
 
 1. Get your RapidAPI credentials
 2. Enter them in the configuration section:
-   - **Base URL**: Your RapidAPI host URL
+   - **Endpoint URL**: Full URL to the endpoint (e.g., `/calculate` or `/calculate/batch`)
    - **API Key**: Your RapidAPI key
    - **API Host**: Your RapidAPI host header
 3. Click "Save Configuration" to validate inputs and update the status indicator. This does not persist anything; it only affects requests from your browser during this session.
 
 Under the hood, the frontend sends your credentials as headers with each request:
 
-- `X-RapidAPI-Base-Url`
+- `X-RapidAPI-Base-Url` (now expected to be the full endpoint URL; the server does not append any path)
 - `X-RapidAPI-Key`
 - `X-RapidAPI-Host`
 
