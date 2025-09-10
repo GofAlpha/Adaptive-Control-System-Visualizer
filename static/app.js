@@ -488,6 +488,15 @@ function showMessage(message, type) {
     }, 5000);
 }
 
+// Safely parse a Response as JSON without throwing on non-JSON bodies
+async function safeJson(response) {
+    try {
+        return await response.json();
+    } catch (_) {
+        return {};
+    }
+}
+
 // Handle modal clicks outside content
 document.addEventListener('click', function(event) {
     const modal = document.getElementById('graphModal');
