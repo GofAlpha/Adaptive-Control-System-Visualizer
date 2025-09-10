@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
@@ -48,12 +48,9 @@ class GraphRequest(BaseModel):
     steps: int = Field(20, ge=5, le=100, description="Number of steps")
     base_request: ControlRequest = Field(..., description="Base request parameters")
 
-# Store for API credentials (in production, use environment variables)
-api_config = {
-    "base_url": "",
-    "api_key": "",
-    "api_host": ""
-}
+# Note: We no longer persist API credentials server-side. Each request may
+# provide RapidAPI credentials via headers. This ensures every user uses their
+# own key without storing it on the server.
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
@@ -66,93 +63,106 @@ async def read_root():
 
 @app.post("/api/config")
 async def set_api_config(config: Dict[str, str]):
-    """Set the RapidAPI configuration"""
-    api_config.update(config)
-    return {"message": "API configuration updated"}
+    """Deprecated: No-op endpoint kept for compatibility.
+    This server does not persist API credentials. Return success without storing.
+    """
+    return {"message": "API configuration ignored (credentials are per-request)"}
 
 @app.get("/api/config")
 async def get_api_config():
-    """Get current API configuration (without sensitive data)"""
+    """Return empty config to signal no server-side storage."""
     return {
-        "base_url": api_config.get("base_url", ""),
-        "has_api_key": bool(api_config.get("api_key")),
-        "api_host": api_config.get("api_host", "")
+        "base_url": "",
+        "has_api_key": False,
+        "api_host": ""
     }
 
 @app.post("/api/calculate")
-async def calculate_control(request: ControlRequest):
-    """Calculate adaptive control parameters"""
-    if not api_config.get("base_url") or not api_config.get("api_key"):
-        # For demo purposes, return mock data if API not configured
+async def calculate_control(
+    request: ControlRequest,
+    x_rapidapi_key: Optional[str] = Header(default=None, alias="X-RapidAPI-Key"),
+    x_rapidapi_host: Optional[str] = Header(default=None, alias="X-RapidAPI-Host"),
+    x_base_url: Optional[str] = Header(default=None, alias="X-RapidAPI-Base-Url"),
+):
+    """Calculate adaptive control parameters.
+    Uses per-request RapidAPI credentials from headers. Falls back to mock data if missing.
+    """
+    if not x_base_url or not x_rapidapi_key or not x_rapidapi_host:
+        # For demo purposes, return mock data if credentials are not provided
         return generate_mock_response(request)
-    
+
     try:
         headers = {
             "Content-Type": "application/json",
-            "X-RapidAPI-Key": api_config["api_key"],
-            "X-RapidAPI-Host": api_config["api_host"]
+            "X-RapidAPI-Key": x_rapidapi_key,
+            "X-RapidAPI-Host": x_rapidapi_host,
         }
-        
+
         response = requests.post(
-            f"{api_config['base_url']}/calculate",
+            f"{x_base_url}/calculate",
             json=request.model_dump(exclude_none=True),
             headers=headers,
-            timeout=10
+            timeout=10,
         )
         response.raise_for_status()
         return response.json()
-        
-    except requests.exceptions.RequestException as e:
+
+    except requests.exceptions.RequestException:
         # Fallback to mock data on API error
         return generate_mock_response(request)
 
 @app.post("/api/graph")
-async def generate_graph_data(request: GraphRequest):
-    """Generate data for parameter sweep graphing"""
+async def generate_graph_data(
+    graph_request: GraphRequest,
+    x_rapidapi_key: Optional[str] = Header(default=None, alias="X-RapidAPI-Key"),
+    x_rapidapi_host: Optional[str] = Header(default=None, alias="X-RapidAPI-Host"),
+    x_base_url: Optional[str] = Header(default=None, alias="X-RapidAPI-Base-Url"),
+):
+    """Generate data for parameter sweep graphing using per-request creds."""
     results = []
     param_values = []
-    
+
     # Generate parameter values
-    start, end, steps = request.start_value, request.end_value, request.steps
+    start, end, steps = graph_request.start_value, graph_request.end_value, graph_request.steps
     step_size = (end - start) / (steps - 1)
-    
+
     for i in range(steps):
         param_value = start + i * step_size
         param_values.append(param_value)
-        
+
         # Create modified request
-        modified_request = request.base_request.model_copy()
-        setattr(modified_request, request.parameter_name, param_value)
-        
+        modified_request = graph_request.base_request.model_copy()
+        setattr(modified_request, graph_request.parameter_name, param_value)
+
         # Calculate result
         try:
-            if not api_config.get("base_url") or not api_config.get("api_key"):
+            if not x_base_url or not x_rapidapi_key or not x_rapidapi_host:
                 result = generate_mock_response(modified_request)
             else:
                 headers = {
                     "Content-Type": "application/json",
-                    "X-RapidAPI-Key": api_config["api_key"],
-                    "X-RapidAPI-Host": api_config["api_host"]
+                    "X-RapidAPI-Key": x_rapidapi_key,
+                    "X-RapidAPI-Host": x_rapidapi_host,
                 }
-                
+
                 response = requests.post(
-                    f"{api_config['base_url']}/calculate",
+                    f"{x_base_url}/calculate",
                     json=modified_request.model_dump(exclude_none=True),
                     headers=headers,
-                    timeout=10
+                    timeout=10,
                 )
                 result = response.json() if response.status_code == 200 else generate_mock_response(modified_request)
-            
+
             results.append(result)
-            
+
         except Exception:
             # Use mock data on error
             results.append(generate_mock_response(modified_request))
-    
+
     return {
         "parameter_values": param_values,
         "results": results,
-        "parameter_name": request.parameter_name
+        "parameter_name": graph_request.parameter_name,
     }
 
 def generate_mock_response(request: ControlRequest) -> Dict[str, Any]:
