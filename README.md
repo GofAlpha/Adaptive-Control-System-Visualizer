@@ -55,13 +55,24 @@ The application will start on `http://localhost:8000`
 
 ## API Configuration
 
-To connect to the real Adaptive Control System API:
+This app now uses per-request RapidAPI credentials. Nothing is stored on the server or in the browser.
+
+To connect to the real Adaptive Control System API for your session only:
 
 1. Get your RapidAPI credentials
 2. Enter them in the configuration section:
    - **Base URL**: Your RapidAPI host URL
    - **API Key**: Your RapidAPI key
    - **API Host**: Your RapidAPI host header
+3. Click "Save Configuration" to validate inputs and update the status indicator. This does not persist anything; it just affects requests sent from your browser.
+
+Under the hood, the frontend sends your credentials as headers with each request:
+
+- `X-RapidAPI-Base-Url`
+- `X-RapidAPI-Key`
+- `X-RapidAPI-Host`
+
+If any of the three are missing, the backend falls back to demo mode with mock data.
 
 ## Parameters
 
