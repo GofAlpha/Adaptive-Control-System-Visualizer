@@ -97,14 +97,25 @@ async def calculate_control(
             "X-RapidAPI-Host": x_rapidapi_host,
         }
 
+        # If the provided endpoint is a batch endpoint, wrap the request in a list
+        payload: Any
+        if "batch" in (x_base_url or "").lower():
+            payload = [request.model_dump(exclude_none=True)]
+        else:
+            payload = request.model_dump(exclude_none=True)
+
         response = requests.post(
             f"{x_base_url}",
-            json=request.model_dump(exclude_none=True),
+            json=payload,
             headers=headers,
             timeout=10,
         )
         response.raise_for_status()
-        return response.json()
+        data = response.json()
+        # If batch response returned a list, return the first item for single calculate
+        if isinstance(data, list) and data:
+            return data[0]
+        return data
 
     except requests.exceptions.RequestException as exc:
         raise HTTPException(status_code=502, detail=f"Upstream API request failed: {str(exc)}")
@@ -128,35 +139,53 @@ async def generate_graph_data(
     start, end, steps = graph_request.start_value, graph_request.end_value, graph_request.steps
     step_size = (end - start) / (steps - 1)
 
+    # Build all parameter values
     for i in range(steps):
         param_value = start + i * step_size
         param_values.append(param_value)
 
-        # Create modified request
-        modified_request = graph_request.base_request.model_copy()
-        setattr(modified_request, graph_request.parameter_name, param_value)
+    headers = {
+        "Content-Type": "application/json",
+        "X-RapidAPI-Key": x_rapidapi_key,
+        "X-RapidAPI-Host": x_rapidapi_host,
+    }
 
-        # Calculate result
-        try:
-            headers = {
-                "Content-Type": "application/json",
-                "X-RapidAPI-Key": x_rapidapi_key,
-                "X-RapidAPI-Host": x_rapidapi_host,
-            }
+    try:
+        if "batch" in (x_base_url or "").lower():
+            # Batch mode: send all modified requests in a single array
+            batch_payload = []
+            for param_value in param_values:
+                modified_request = graph_request.base_request.model_copy()
+                setattr(modified_request, graph_request.parameter_name, param_value)
+                batch_payload.append(modified_request.model_dump(exclude_none=True))
 
             response = requests.post(
                 f"{x_base_url}",
-                json=modified_request.model_dump(exclude_none=True),
+                json=batch_payload,
                 headers=headers,
-                timeout=10,
+                timeout=20,
             )
             response.raise_for_status()
-            result = response.json()
+            data = response.json()
+            if not isinstance(data, list):
+                raise HTTPException(status_code=502, detail="Upstream batch response was not a list")
+            results = data
+        else:
+            # Non-batch mode: request per step
+            for param_value in param_values:
+                modified_request = graph_request.base_request.model_copy()
+                setattr(modified_request, graph_request.parameter_name, param_value)
+                response = requests.post(
+                    f"{x_base_url}",
+                    json=modified_request.model_dump(exclude_none=True),
+                    headers=headers,
+                    timeout=10,
+                )
+                response.raise_for_status()
+                results.append(response.json())
 
-            results.append(result)
-
-        except requests.exceptions.RequestException as exc:
-            raise HTTPException(status_code=502, detail=f"Upstream API request failed during sweep: {str(exc)}")
+    except requests.exceptions.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"Upstream API request failed during sweep: {str(exc)}")
 
     return {
         "parameter_values": param_values,
