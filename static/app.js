@@ -1,6 +1,7 @@
 // Global variables
 let chart = null;
-let apiConfigured = false;
+let apiConfigured = false; // credentials present in inputs
+let isConnected = false;   // verified successful call to backend/upstream
 
 // Optional remote backend base (e.g., when hosting frontend on GCS)
 // Configure one of the following in production:
@@ -12,9 +13,9 @@ const BACKEND_BASE = (typeof window !== 'undefined' && window.BACKEND_BASE)
 const apiUrl = (p) => `${BACKEND_BASE}${p}`;
 
 // Initialize the application
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     initializeChart();
-    loadApiConfig();
+    await loadApiConfig();
     
     // Add event listeners for real-time parameter updates
     const inputs = document.querySelectorAll('input, textarea, select');
@@ -23,6 +24,12 @@ document.addEventListener('DOMContentLoaded', function() {
             input.addEventListener('input', debounce(updatePreview, 500));
         }
     });
+
+    // If credentials are already present on load, attempt verification
+    if (apiConfigured) {
+        updateApiStatus();
+        await verifyRapidApiConnection();
+    }
 });
 
 // Initialize Chart.js
@@ -99,11 +106,14 @@ async function saveApiConfig() {
     const apiKey = document.getElementById('apiKey').value.trim();
     const apiHost = document.getElementById('apiHost').value.trim();
     apiConfigured = !!(baseUrl && apiKey && apiHost);
+    isConnected = false;
     updateApiStatus();
-    showMessage(apiConfigured
-        ? 'Credentials saved locally to this page session. Requests will use the real API.'
-        : 'Incomplete credentials. Requests are blocked until all fields are filled.',
-        apiConfigured ? 'success' : 'error');
+    if (!apiConfigured) {
+        showMessage('Incomplete credentials. Enter Endpoint URL, RapidAPI Key, and Host header.', 'error');
+        return;
+    }
+    // Verify connectivity by performing a lightweight calculate call
+    await verifyRapidApiConnection();
 }
 
 async function loadApiConfig() {
@@ -112,6 +122,7 @@ async function loadApiConfig() {
     const apiKey = document.getElementById('apiKey').value.trim();
     const apiHost = document.getElementById('apiHost').value.trim();
     apiConfigured = !!(baseUrl && apiKey && apiHost);
+    isConnected = false; // must verify after page load
     updateApiStatus();
 }
 
@@ -131,13 +142,54 @@ function getApiHeaders() {
 function updateApiStatus() {
     const statusElement = document.getElementById('apiStatus');
     const indicator = statusElement.querySelector('.status-indicator');
-    
-    if (apiConfigured) {
-        indicator.className = 'status-indicator status-connected';
+
+    if (!apiConfigured) {
+        if (indicator) indicator.className = 'status-indicator status-disconnected';
+        statusElement.innerHTML = '<span class="status-indicator status-disconnected"></span>Not connected. Enter RapidAPI Endpoint URL, Key, and Host to enable.';
+        return;
+    }
+
+    if (isConnected) {
+        if (indicator) indicator.className = 'status-indicator status-connected';
         statusElement.innerHTML = '<span class="status-indicator status-connected"></span>Connected to RapidAPI';
     } else {
-        indicator.className = 'status-indicator status-disconnected';
-        statusElement.innerHTML = '<span class="status-indicator status-disconnected"></span>Not connected. Enter RapidAPI Base URL, Key, and Host to enable.';
+        if (indicator) indicator.className = 'status-indicator status-disconnected';
+        statusElement.innerHTML = '<span class="status-indicator status-disconnected"></span>Credentials provided. Verifying connection…';
+    }
+}
+
+// Attempt a minimal call to verify the upstream API via backend
+async function verifyRapidApiConnection() {
+    try {
+        const testPayload = {
+            current_h: 1.0,
+            beta_0: 1.0,
+            lambda_factor: 1.0,
+            epsilon: 1e-10,
+            base_output: [1.0],
+            alpha_param: 1.0,
+            gamma_param: 1.0
+        };
+
+        const resp = await fetch(apiUrl('/api/calculate'), {
+            method: 'POST',
+            headers: getApiHeaders(),
+            body: JSON.stringify(testPayload)
+        });
+
+        if (resp.ok) {
+            isConnected = true;
+            showMessage('Verified connection to RapidAPI.', 'success');
+        } else {
+            isConnected = false;
+            const err = await safeJson(resp);
+            showMessage('RapidAPI verification failed: ' + (err.detail || resp.statusText), 'error');
+        }
+    } catch (e) {
+        isConnected = false;
+        showMessage('RapidAPI verification error: ' + e.message, 'error');
+    } finally {
+        updateApiStatus();
     }
 }
 
@@ -184,8 +236,8 @@ async function calculateSingle() {
     button.disabled = true;
 
     try {
-        if (!apiConfigured) {
-            showMessage('Please configure RapidAPI Base URL, Key, and Host before making requests.', 'error');
+        if (!apiConfigured || !isConnected) {
+            showMessage('Please configure and verify RapidAPI connectivity (Endpoint URL, Key, Host) before making requests.', 'error');
             return;
         }
         const data = getFormData();
@@ -330,8 +382,8 @@ async function generateGraph() {
     button.disabled = true;
 
     try {
-        if (!apiConfigured) {
-            showMessage('Please configure RapidAPI Base URL, Key, and Host before generating graphs.', 'error');
+        if (!apiConfigured || !isConnected) {
+            showMessage('Please configure and verify RapidAPI connectivity (Endpoint URL, Key, Host) before generating graphs.', 'error');
             return;
         }
         const baseRequest = getFormData();
@@ -383,7 +435,7 @@ function updateChart(data) {
 // Real-time preview update (debounced)
 async function updatePreview() {
     try {
-        if (!apiConfigured) {
+        if (!apiConfigured || !isConnected) {
             return; // Avoid spamming the backend with 400s when not configured
         }
         const data = getFormData();
