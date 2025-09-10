@@ -10,7 +10,7 @@ A beautiful web application for interactive parameter exploration and real-time 
 - 🔌 **RapidAPI Integration** - Connect to the real Adaptive Control System API
 - 🎨 **Modern UI** - Beautiful, responsive design with gradient backgrounds
 - 📱 **Mobile Friendly** - Works on desktop, tablet, and mobile devices
-- 🔧 **Demo Mode** - Works with mock data when API is not configured
+// Removed: demo mode no longer available. Real API credentials are required.
 
 ## Quick Start
 
@@ -28,10 +28,13 @@ python main.py
 
 The application will start on `http://localhost:8000`
 
-### 3. Configure API (Optional)
+### 3. Configure API (Required)
 
-- Enter your RapidAPI credentials in the configuration section
-- Without API configuration, the app runs in demo mode with mock data
+Enter valid RapidAPI credentials in the configuration section at the top of the UI. Requests are blocked until all three are provided:
+
+- Base URL (e.g., `https://your-rapidapi-service.example.com`) that exposes a `/calculate` endpoint
+- RapidAPI Key
+- RapidAPI Host header (e.g., `your-rapidapi-service.example.com`)
 
 ## Usage
 
@@ -52,19 +55,20 @@ The application will start on `http://localhost:8000`
 
 - Parameters update the preview chart automatically as you type
 - 500ms debounce prevents excessive API calls
+- Preview is disabled until valid credentials are provided
 
 ## API Configuration
 
-This app now uses per-request RapidAPI credentials. Nothing is stored on the server or in the browser.
+This app requires per-request RapidAPI credentials. Nothing is persisted on the server.
 
-To connect to the real Adaptive Control System API for your session only:
+To connect to the real Adaptive Control System API for your session:
 
 1. Get your RapidAPI credentials
 2. Enter them in the configuration section:
    - **Base URL**: Your RapidAPI host URL
    - **API Key**: Your RapidAPI key
    - **API Host**: Your RapidAPI host header
-3. Click "Save Configuration" to validate inputs and update the status indicator. This does not persist anything; it just affects requests sent from your browser.
+3. Click "Save Configuration" to validate inputs and update the status indicator. This does not persist anything; it only affects requests from your browser during this session.
 
 Under the hood, the frontend sends your credentials as headers with each request:
 
@@ -72,7 +76,7 @@ Under the hood, the frontend sends your credentials as headers with each request
 - `X-RapidAPI-Key`
 - `X-RapidAPI-Host`
 
-If any of the three are missing, the backend falls back to demo mode with mock data.
+If any of the three are missing, the backend now rejects requests with HTTP 400. No demo/mock fallback exists.
 
 ## Parameters
 
@@ -137,7 +141,7 @@ Modify the Chart.js configuration in the `initializeChart()` function in `app.js
 
 ### Styling
 
-All styles are in the `<style>` section of `index.html`. The design uses:
+All styles are in the `<style>` section of `static/index.html`. The design uses:
 - CSS Grid for responsive layouts
 - CSS Gradients for modern appearance
 - CSS Transitions for smooth interactions
@@ -145,9 +149,9 @@ All styles are in the `<style>` section of `index.html`. The design uses:
 ## Error Handling
 
 - Input validation with helpful error messages
-- Graceful fallback to demo mode if API fails
-- User-friendly error notifications
-- Comprehensive logging
+- If upstream API errors, server returns 502 with details
+- User-friendly error notifications in the UI
+- Basic logging
 
 ## Browser Support
 
@@ -173,8 +177,7 @@ This project is designed for integration with RapidAPI marketplace. Please ensur
 For issues or questions:
 1. Check the browser console for errors
 2. Verify API configuration
-3. Test with demo mode first
-4. Check network connectivity
+3. Check network connectivity
 
 ---
 
